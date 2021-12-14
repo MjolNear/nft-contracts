@@ -124,11 +124,18 @@ impl Payouts for Contract {
             .unwrap_or_else(|| Payout { payout: HashMap::new() })
             .payout
             .iter()
-            .map(|(account, royalty)|
+            .filter_map(|(account, royalty)|
                 {
-                    let royalty_u128 = u128::from(*royalty);
-                    total_royalties += royalty_u128;
-                    (account.clone(), payout_part_from_balance(royalty_u128, balance_u128))
+                    if *account == owner_id {
+                        None
+                    } else {
+                        let royalty_u128 = u128::from(*royalty);
+                        total_royalties += royalty_u128;
+                        Some(
+                            (account.clone(),
+                             payout_part_from_balance(royalty_u128, balance_u128))
+                        )
+                    }
                 }
             ).collect();
 
