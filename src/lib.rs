@@ -51,7 +51,6 @@ const MAX_LEN_PAYOUT: usize = 10;
 impl Contract {
     #[init]
     pub fn new(
-        #[serializer(borsh)]
         args: NewArgs
     ) -> Self {
         assert!(!env::state_exists(), "Already initialized");
@@ -77,7 +76,6 @@ impl Contract {
         token_metadata: TokenMetadata,
         payout: Option<Payout>
     ) -> Token {
-        assert_eq!(env::signer_account_id(), self.tokens.owner_id, "Unauthorized");
 
         if let Some(royalties) = payout {
             assert!(royalties.payout.len() <= MAX_LEN_PAYOUT);
