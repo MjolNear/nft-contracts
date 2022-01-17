@@ -7,6 +7,7 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::{env, near_bindgen, AccountId, BorshStorageKey, PanicOnDefault, Promise, PromiseOrValue, assert_one_yocto};
 use serde::{Serialize, Deserialize};
 use near_sdk::collections::LookupMap;
+use near_sdk::env::is_valid_account_id;
 use crate::payouts::Payouts;
 
 #[derive(BorshSerialize, BorshStorageKey)]
@@ -87,6 +88,10 @@ impl Contract {
                     .values()
                     .map(|value| u128::from(*value))
                     .sum::<u128>() < MAX_PAYOUT);
+            assert!(royalties
+                .payout
+                .keys()
+                .all(|acc| is_valid_account_id(acc.as_bytes())));
 
             let token = self
                 .tokens
@@ -99,6 +104,16 @@ impl Contract {
                 .tokens
                 .internal_mint(token_id, token_owner_id, Some(token_metadata))
         }
+    }
+
+    pub fn nft_royalties(&self, token_id: TokenId, max_len_payout: u32) -> HashMap<AccountId, U128> {
+        let royalties: HashMap<AccountId, U128> = self
+            .payouts
+            .get(&token_id.clone())
+            .unwrap_or_else(|| Payout { payout: HashMap::new() })
+            .payout;
+        assert!(royalties.len() <= max_len_payout as usize);
+        royalties
     }
 }
 
