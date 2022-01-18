@@ -1,13 +1,14 @@
 mod payouts;
 mod collection_meta_js;
 
+use std::cmp::max;
 use near_contract_standards::non_fungible_token::metadata::{NFTContractMetadata, TokenMetadata};
 use near_contract_standards::non_fungible_token::{hash_account_id, NonFungibleToken};
 use near_contract_standards::non_fungible_token::{Token, TokenId};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::{env, near_bindgen, AccountId, BorshStorageKey, PanicOnDefault, Promise, PromiseOrValue, assert_one_yocto, CryptoHash};
 use serde::{Serialize, Deserialize};
-use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet};
+use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet, Vector};
 use near_sdk::env::is_valid_account_id;
 use near_sdk::serde_json::json;
 use crate::collection_meta_js::CollectionMetadataJs;
@@ -52,6 +53,14 @@ pub struct CollectionMetadata {
     reference: Option<String>,
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct CollectionData {
+    pub tokens: Vec<Token>,
+    pub has_next_batch: bool,
+    pub total_count: u64
+}
+
 
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
@@ -61,7 +70,7 @@ pub struct Contract {
     payouts: LookupMap<TokenId, Payout>,
     collections: UnorderedMap<CollectionId, CollectionMetadata>,
     collections_by_owner_id: LookupMap<AccountId, UnorderedSet<CollectionId>>,
-    tokens_by_collection_id: LookupMap<CollectionId, UnorderedSet<TokenId>>,
+    tokens_by_collection_id: LookupMap<CollectionId, Vector<TokenId>>,
     total_minted: u128,
     total_collections: u128,
 }
@@ -168,11 +177,11 @@ impl Contract {
                 .tokens_by_collection_id
                 .get(&some_collection_id.clone())
                 .unwrap_or_else(||
-                    UnorderedSet::new(StorageKey::TokensByCollectionIdInner {
+                    Vector::new(StorageKey::TokensByCollectionIdInner {
                         account_id_hash: hash_account_id(&collection_owner.clone())
                     }.try_to_vec().unwrap()));
 
-            assert!(collection_tokens.insert(&token_id.clone()));
+            collection_tokens.push(&token_id.clone());
 
             self
                 .tokens_by_collection_id
@@ -238,6 +247,55 @@ impl Contract {
                                    Some(token_metadata));
             }
         }
+    }
+
+    pub fn get_nfts_from_collection(&self, collection_id: CollectionId,
+                                    limit: u64, from: u64) -> CollectionData {
+        assert!(self.collections.get(&collection_id.clone()).is_some());
+        let collection_owner = self.collections.get(&collection_id.clone()).unwrap().owner_id;
+        let token_ids = self
+            .tokens_by_collection_id
+            .get(&collection_id.clone())
+            .unwrap_or_else(||
+                Vector::new(StorageKey::TokensByCollectionIdInner {
+                    account_id_hash: hash_account_id(&collection_owner.clone())
+                }.try_to_vec().unwrap()));
+        let size = token_ids.len() as u64;
+
+        let mut res = vec![];
+        if from >= size {
+            return CollectionData {
+                tokens: res,
+                has_next_batch: false,
+                total_count: size
+            };
+        }
+        let real_to = (size - from) as usize;
+        let real_from = max(real_to as i64 - limit as i64, 0 as i64) as usize;
+
+        for i in (real_from..real_to).rev() {
+            res.push(self
+                .tokens
+                .nft_token(token_ids.get(i as u64).unwrap()).unwrap())
+        }
+        CollectionData {
+            tokens: res,
+            has_next_batch: real_from > 0,
+            total_count: size
+        }
+
+    }
+
+    pub fn get_collection_info(&self, collection_id: CollectionId) -> Option<CollectionMetadata> {
+        self.collections.get(&collection_id)
+    }
+
+    pub fn get_collections_by_owner_id(&self, owner_id: AccountId) -> Vec<CollectionId> {
+        self
+            .collections_by_owner_id
+            .get(&owner_id.clone())
+            .map(|x| x.to_vec())
+            .unwrap_or_else(|| vec![])
     }
 
     pub fn nft_royalties(&self, token_id: TokenId, max_len_payout: u32) -> HashMap<AccountId, U128> {
