@@ -30,12 +30,6 @@ enum StorageKey {
 
 type CollectionId = String;
 
-#[derive(Serialize, Deserialize, BorshSerialize, BorshDeserialize)]
-pub struct NewArgs {
-    owner_id: AccountId,
-    marketplace_metadata: NFTContractMetadata,
-}
-
 #[derive(Serialize, Deserialize, BorshSerialize, BorshDeserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Payout {
@@ -92,20 +86,21 @@ const COPY_DELIMITER: &str = "#";
 impl Contract {
     #[init]
     pub fn new(
-        #[serializer(borsh)]
-        args: NewArgs
+        owner_id: AccountId,
+        marketplace_metadata: NFTContractMetadata,
     ) -> Self {
         assert!(!env::state_exists(), "Already initialized");
+        marketplace_metadata.assert_valid();
 
         Self {
             tokens: NonFungibleToken::new(
                 StorageKey::NonFungibleToken,
-                args.owner_id,
+                 owner_id,
                 Some(StorageKey::TokenMetadata),
                 Some(StorageKey::Enumeration),
                 Some(StorageKey::Approval),
             ),
-            metadata: args.marketplace_metadata,
+            metadata: marketplace_metadata,
             payouts: LookupMap::new(StorageKey::Royalties),
             collections: UnorderedMap::new(StorageKey::Collections),
             collections_by_owner_id: LookupMap::new(StorageKey::CollectionsByOwnerId),
@@ -117,6 +112,7 @@ impl Contract {
 
     #[payable]
     pub fn create_collection(&mut self, metadata: CollectionMetadataJs) -> CollectionMetadata {
+        // TODO traits verification
         let owner_id = env::predecessor_account_id();
         let new_id = self.next_collection();
         let collection_id: CollectionId = format!("{}{}{}", COLLECTION_TAG, DELIMITER, new_id);
