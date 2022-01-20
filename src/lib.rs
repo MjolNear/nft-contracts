@@ -315,6 +315,31 @@ impl Contract {
         let res = self.total_minted;
         res
     }
+
+    #[init(ignore_state)]
+    #[private]
+    pub fn migrate() -> Self {
+        #[derive(BorshDeserialize)]
+        struct Old {
+            metadata: NFTContractMetadata,
+            tokens: NonFungibleToken,
+            payouts: LookupMap<TokenId, Payout>
+        }
+
+        let prev_state: Old = env::state_read().expect("No such state.");
+        let size = prev_state.tokens.nft_total_supply().0;
+
+        Self {
+            metadata: prev_state.metadata,
+            tokens: prev_state.tokens,
+            payouts: prev_state.payouts,
+            collections: UnorderedMap::new(StorageKey::Collections),
+            collections_by_owner_id: LookupMap::new(StorageKey::CollectionsByOwnerId),
+            tokens_by_collection_id: LookupMap::new(StorageKey::TokensByCollectionId),
+            total_minted: size,
+            total_collections: 0,
+        }
+    }
 }
 
 
