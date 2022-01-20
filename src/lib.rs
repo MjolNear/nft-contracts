@@ -55,6 +55,14 @@ pub struct CollectionData {
     pub total_count: u64
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(crate = "near_sdk::serde")]
+pub struct CollectionsBatch {
+    pub collections: Vec<CollectionMetadata>,
+    pub has_next_batch: bool,
+    pub total_count: u64
+}
+
 
 #[near_bindgen]
 #[derive(BorshDeserialize, BorshSerialize, PanicOnDefault)]
@@ -279,6 +287,31 @@ impl Contract {
             has_next_batch: real_from > 0,
             total_count: size
         }
+    }
+
+    pub fn get_collections(&self, limit: u64, from: u64) -> CollectionsBatch {
+        let collections : Vec<CollectionMetadata> = self.collections.values().collect();
+        let size = collections.len() as u64;
+
+        let mut res = vec![];
+        if from >= size {
+            return CollectionsBatch {
+                collections: res,
+                has_next_batch: false,
+                total_count: size
+            };
+        }
+        let real_to = (size - from) as usize;
+        let real_from = max(real_to as i64 - limit as i64, 0 as i64) as usize;
+
+        for i in (real_from..real_to).rev() {
+            res.push(collections[i].clone())
+        }
+        CollectionsBatch {
+            collections: res,
+            has_next_batch: real_from > 0,
+            total_count: size
+        }
 
     }
 
@@ -286,11 +319,13 @@ impl Contract {
         self.collections.get(&collection_id)
     }
 
-    pub fn get_collections_by_owner_id(&self, owner_id: AccountId) -> Vec<CollectionId> {
+    pub fn get_collections_by_owner_id(&self, owner_id: AccountId) -> Vec<CollectionMetadata> {
         self
             .collections_by_owner_id
             .get(&owner_id.clone())
-            .map(|x| x.to_vec())
+            .map(|x|
+                x.to_vec().iter().map(|collection_id|
+                    self.collections.get(collection_id).unwrap()).collect())
             .unwrap_or_else(|| vec![])
     }
 
