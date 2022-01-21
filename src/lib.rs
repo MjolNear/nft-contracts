@@ -2,6 +2,7 @@ mod payouts;
 mod collection_meta_js;
 
 use std::cmp::max;
+use std::collections::HashMap;
 use near_contract_standards::non_fungible_token::metadata::{NFTContractMetadata, TokenMetadata};
 use near_contract_standards::non_fungible_token::{hash_account_id, NonFungibleToken};
 use near_contract_standards::non_fungible_token::{Token, TokenId};
@@ -10,6 +11,7 @@ use near_sdk::{env, near_bindgen, AccountId, BorshStorageKey, PanicOnDefault, Pr
 use serde::{Serialize, Deserialize};
 use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet, Vector};
 use near_sdk::env::is_valid_account_id;
+use near_sdk::json_types::U128;
 use near_sdk::serde_json::json;
 use crate::collection_meta_js::CollectionMetadataJs;
 use crate::payouts::Payouts;
@@ -52,7 +54,7 @@ pub struct CollectionMetadata {
 pub struct CollectionData {
     pub tokens: Vec<Token>,
     pub has_next_batch: bool,
-    pub total_count: u64
+    pub total_count: u64,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -60,7 +62,7 @@ pub struct CollectionData {
 pub struct CollectionsBatch {
     pub collections: Vec<CollectionMetadata>,
     pub has_next_batch: bool,
-    pub total_count: u64
+    pub total_count: u64,
 }
 
 
@@ -87,7 +89,7 @@ const MAX_LEN_PAYOUT: usize = 10;
 const COLLECTION_TAG: &str = "collection";
 const TOKEN_TAG: &str = "token";
 const DELIMITER: &str = "-";
-const COPY_DELIMITER: &str = "#";
+const COPY_DELIMITER: &str = "-";
 
 
 #[near_bindgen]
@@ -103,7 +105,7 @@ impl Contract {
         Self {
             tokens: NonFungibleToken::new(
                 StorageKey::NonFungibleToken,
-                 owner_id,
+                owner_id,
                 Some(StorageKey::TokenMetadata),
                 Some(StorageKey::Enumeration),
                 Some(StorageKey::Approval),
@@ -212,43 +214,49 @@ impl Contract {
                 .keys()
                 .all(|acc| is_valid_account_id(acc.as_bytes())));
 
-            if let Some(copies) = token_metadata.copies {
-                for copy_id in 0..copies {
-                    let copy_token_id =
-                        format!("{}{}{}", token_id.clone(), COPY_DELIMITER, copy_id + 1);
+            match token_metadata.copies {
+                Some(1) | None => {
                     self
                         .tokens
-                        .internal_mint(copy_token_id.clone(),
+                        .internal_mint(token_id.clone(),
                                        token_owner_id.clone(),
-                                       Some(token_metadata.clone()));
-                    self.payouts.insert(&copy_token_id, &royalties.clone());
+                                       Some(token_metadata));
+                    self.payouts.insert(&token_id, &royalties);
                 }
-            } else {
-                self
-                    .tokens
-                    .internal_mint(token_id.clone(),
-                                   token_owner_id.clone(),
-                                   Some(token_metadata));
-                self.payouts.insert(&token_id, &royalties);
+                Some(copies) => {
+                    for copy_id in 0..copies {
+                        let copy_token_id =
+                            format!("{}{}{}", token_id.clone(), COPY_DELIMITER, copy_id + 1);
+                        self
+                            .tokens
+                            .internal_mint(copy_token_id.clone(),
+                                           token_owner_id.clone(),
+                                           Some(token_metadata.clone()));
+                        self.payouts.insert(&copy_token_id, &royalties.clone());
+                    }
+                }
             }
         } else {
             // no royalties mint
-            if let Some(copies) = token_metadata.copies {
-                for copy_id in 0..copies {
-                    let copy_token_id =
-                        format!("{}{}{}", token_id.clone(), COPY_DELIMITER, copy_id + 1);
+            match token_metadata.copies {
+                Some(1) | None => {
                     self
                         .tokens
-                        .internal_mint(copy_token_id.clone(),
+                        .internal_mint(token_id.clone(),
                                        token_owner_id.clone(),
-                                       Some(token_metadata.clone()));
+                                       Some(token_metadata));
                 }
-            } else {
-                self
-                    .tokens
-                    .internal_mint(token_id.clone(),
-                                   token_owner_id.clone(),
-                                   Some(token_metadata));
+                Some(copies) => {
+                    for copy_id in 0..copies {
+                        let copy_token_id =
+                            format!("{}{}{}", token_id.clone(), COPY_DELIMITER, copy_id + 1);
+                        self
+                            .tokens
+                            .internal_mint(copy_token_id.clone(),
+                                           token_owner_id.clone(),
+                                           Some(token_metadata.clone()));
+                    }
+                }
             }
         }
     }
@@ -271,7 +279,7 @@ impl Contract {
             return CollectionData {
                 tokens: res,
                 has_next_batch: false,
-                total_count: size
+                total_count: size,
             };
         }
         let real_to = (size - from) as usize;
@@ -285,12 +293,12 @@ impl Contract {
         CollectionData {
             tokens: res,
             has_next_batch: real_from > 0,
-            total_count: size
+            total_count: size,
         }
     }
 
     pub fn get_collections(&self, limit: u64, from: u64) -> CollectionsBatch {
-        let collections : Vec<CollectionMetadata> = self.collections.values().collect();
+        let collections: Vec<CollectionMetadata> = self.collections.values().collect();
         let size = collections.len() as u64;
 
         let mut res = vec![];
@@ -298,7 +306,7 @@ impl Contract {
             return CollectionsBatch {
                 collections: res,
                 has_next_batch: false,
-                total_count: size
+                total_count: size,
             };
         }
         let real_to = (size - from) as usize;
@@ -310,9 +318,8 @@ impl Contract {
         CollectionsBatch {
             collections: res,
             has_next_batch: real_from > 0,
-            total_count: size
+            total_count: size,
         }
-
     }
 
     pub fn get_collection_info(&self, collection_id: CollectionId) -> Option<CollectionMetadata> {
@@ -358,7 +365,7 @@ impl Contract {
         struct Old {
             metadata: NFTContractMetadata,
             tokens: NonFungibleToken,
-            payouts: LookupMap<TokenId, Payout>
+            payouts: LookupMap<TokenId, Payout>,
         }
 
         let prev_state: Old = env::state_read().expect("No such state.");
