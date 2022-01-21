@@ -65,6 +65,16 @@ near call aa.8o8.near nft_payout
   --depositYocto 1
 ```
 
+6. Migrate:
+```
+near call mjol.near migrate '{}' --accountId mjol.near
+```
+
+7. Create collection:
+```
+near call mjol.near create_collection '{"metadata" : {"title":"Apeees", "desc":"100 Apes", "media": "https://ipfs.io/ipfs/bafybeicumf3colv5hyzk2orbtei7akcx6zgwku3oymf2sq2dm4ikpdmreu/E2pQm1oUUAI3_2z-1.jpg"}}' --accountId turk.near --deposit 0.1 --gas 250000000000000
+```
+
 ### Deploying to Testnet
 
 To deploy to Testnet, you can use next command:
@@ -78,5 +88,7 @@ This will output on the contract ID it deployed.
 
 To deploy to Mainnet, you can use next command:
 ```
-near deploy marketplace.near --nodeUrl https://rpc.mainnet.near.org --networkId mainnet --explorerUrl https://explorer.mainnet.near.org --helperUrl https://helper.mainnet.near.org
+export NEAR_ENV=mainnet
+near deploy mjol.near --accountId mjol.near
 ```
+
