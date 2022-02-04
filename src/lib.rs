@@ -2,6 +2,7 @@ mod payouts;
 mod collection_meta_js;
 
 use std::cmp::max;
+use std::collections::HashMap;
 use near_contract_standards::non_fungible_token::metadata::{NFTContractMetadata, TokenMetadata};
 use near_contract_standards::non_fungible_token::{hash_account_id, NonFungibleToken};
 use near_contract_standards::non_fungible_token::{Token, TokenId};
@@ -10,6 +11,7 @@ use near_sdk::{env, near_bindgen, AccountId, BorshStorageKey, PanicOnDefault, Pr
 use serde::{Serialize, Deserialize};
 use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet, Vector};
 use near_sdk::env::is_valid_account_id;
+use near_sdk::json_types::U128;
 use near_sdk::serde_json::json;
 use crate::collection_meta_js::CollectionMetadataJs;
 use crate::payouts::Payouts;
@@ -293,6 +295,10 @@ impl Contract {
             has_next_batch: real_from > 0,
             total_count: size,
         }
+    }
+
+    pub fn nft_metadata(self) -> NFTContractMetadata {
+        self.metadata
     }
 
     pub fn get_collections(&self, limit: u64, from: u64) -> CollectionsBatch {
