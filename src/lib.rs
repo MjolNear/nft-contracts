@@ -2,7 +2,6 @@ mod payouts;
 mod collection_meta_js;
 
 use std::cmp::max;
-use std::collections::HashMap;
 use near_contract_standards::non_fungible_token::metadata::{NFTContractMetadata, TokenMetadata};
 use near_contract_standards::non_fungible_token::{hash_account_id, NonFungibleToken};
 use near_contract_standards::non_fungible_token::{Token, TokenId};
@@ -11,7 +10,6 @@ use near_sdk::{env, near_bindgen, AccountId, BorshStorageKey, PanicOnDefault, Pr
 use serde::{Serialize, Deserialize};
 use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet, Vector};
 use near_sdk::env::is_valid_account_id;
-use near_sdk::json_types::U128;
 use near_sdk::serde_json::json;
 use crate::collection_meta_js::CollectionMetadataJs;
 use crate::payouts::Payouts;
@@ -23,7 +21,7 @@ enum StorageKey {
     Enumeration,
     Approval,
     Royalties,
-    Collections,
+    CollectionsNew,
     CollectionsByOwnerId,
     CollectionsByOwnerIdInner { account_id_hash: CryptoHash },
     TokensByCollectionId,
@@ -42,6 +40,7 @@ pub struct Payout {
 #[serde(crate = "near_sdk::serde")]
 pub struct CollectionMetadata {
     collection_id: CollectionId,
+    collection_contract: String,
     owner_id: AccountId,
     title: String,
     desc: String,
@@ -112,7 +111,7 @@ impl Contract {
             ),
             metadata: marketplace_metadata,
             payouts: LookupMap::new(StorageKey::Royalties),
-            collections: UnorderedMap::new(StorageKey::Collections),
+            collections: UnorderedMap::new(StorageKey::CollectionsNew),
             collections_by_owner_id: LookupMap::new(StorageKey::CollectionsByOwnerId),
             tokens_by_collection_id: LookupMap::new(StorageKey::TokensByCollectionId),
             total_minted: 0,
@@ -121,15 +120,27 @@ impl Contract {
     }
 
     #[payable]
+    #[private]
+    pub fn add_collection(&mut self, metadata: CollectionMetadataJs, owner_id: AccountId) -> CollectionMetadata {
+        return self.internal_create_collection(metadata,  owner_id);
+    }
+
+    #[payable]
     pub fn create_collection(&mut self, metadata: CollectionMetadataJs) -> CollectionMetadata {
-        // TODO traits verification
         let owner_id = env::predecessor_account_id();
+        return self.internal_create_collection(metadata, owner_id);
+    }
+
+    #[payable]
+    #[private]
+    pub fn internal_create_collection(&mut self, metadata: CollectionMetadataJs, owner_id: AccountId) -> CollectionMetadata {
         let new_id = self.next_collection();
         let collection_id: CollectionId = format!("{}{}{}", COLLECTION_TAG, DELIMITER, new_id);
 
         assert!(self.collections.get(&collection_id.clone()).is_none());
         let meta = CollectionMetadata {
             collection_id: collection_id.clone(),
+            collection_contract: metadata.contract,
             owner_id: owner_id.clone(),
             title: metadata.title,
             desc: metadata.desc,
@@ -350,6 +361,10 @@ impl Contract {
         royalties
     }
 
+    pub fn nft_collection_supply(&self, collection_id: CollectionId) -> String {
+        return self.tokens_by_collection_id.get(&collection_id).unwrap().len().to_string()
+    }
+
     fn next_collection(&mut self) -> u128 {
         self.total_collections += 1;
         let res = self.total_collections;
@@ -370,20 +385,24 @@ impl Contract {
             metadata: NFTContractMetadata,
             tokens: NonFungibleToken,
             payouts: LookupMap<TokenId, Payout>,
+            collections: UnorderedMap<CollectionId, CollectionMetadata>,
+            collections_by_owner_id: LookupMap<AccountId, UnorderedSet<CollectionId>>,
+            tokens_by_collection_id: LookupMap<CollectionId, Vector<TokenId>>,
+            total_minted: u128,
+            total_collections: u128,
         }
 
         let prev_state: Old = env::state_read().expect("No such state.");
-        let size = prev_state.tokens.nft_total_supply().0;
 
         Self {
             metadata: prev_state.metadata,
             tokens: prev_state.tokens,
             payouts: prev_state.payouts,
-            collections: UnorderedMap::new(StorageKey::Collections),
-            collections_by_owner_id: LookupMap::new(StorageKey::CollectionsByOwnerId),
-            tokens_by_collection_id: LookupMap::new(StorageKey::TokensByCollectionId),
-            total_minted: size,
-            total_collections: 0,
+            collections: prev_state.collections,
+            collections_by_owner_id: prev_state.collections_by_owner_id,
+            tokens_by_collection_id: prev_state.tokens_by_collection_id,
+            total_minted: prev_state.total_minted,
+            total_collections: prev_state.total_collections,
         }
     }
 }

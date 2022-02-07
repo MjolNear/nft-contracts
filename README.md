@@ -72,7 +72,17 @@ near call mjol.near migrate '{}' --accountId mjol.near
 
 7. Create collection:
 ```
-near call mjol.near create_collection '{"metadata" : {"title":"Apeees", "desc":"100 Apes", "media": "https://ipfs.io/ipfs/bafybeicumf3colv5hyzk2orbtei7akcx6zgwku3oymf2sq2dm4ikpdmreu/E2pQm1oUUAI3_2z-1.jpg"}}' --accountId turk.near --deposit 0.1 --gas 250000000000000
+near call mjol.near create_collection '{"metadata" : {"title":"NPunks", "desc":"NPunks are NFTs on the Near blockchain. Each of these 10,000 NPunks has attributes that make them unique according to a defined rarity system.", "media": "https://ipfs.io/ipfs/bafybeicumf3colv5hyzk2orbtei7akcx6zgwku3oymf2sq2dm4ikpdmreu/E2pQm1oUUAI3_2z-1.jpg"}}' --accountId turk.near --deposit 0.1 --gas 250000000000000
+```
+
+8. Get collection info:
+```
+near call mjol.near get_collection_info '{"collection_id" : "collection-3"}' --accountId mjol.near
+```
+
+9. Get collection NFTs:
+```
+near call mjol.near get_nfts_from_collection '{"collection_id" : "collection-3", "from" : 0, "limit" : 20}' --accountId mjol.near
 ```
 
 ### Deploying to Testnet
