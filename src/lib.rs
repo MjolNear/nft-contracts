@@ -9,8 +9,10 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::{env, near_bindgen, AccountId, BorshStorageKey, PanicOnDefault, Promise, PromiseOrValue, assert_one_yocto, CryptoHash};
 use serde::{Serialize, Deserialize};
 use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet, Vector};
+use std::collections::HashMap;
 use near_sdk::env::is_valid_account_id;
 use near_sdk::serde_json::json;
+use near_sdk::json_types::U128;
 use crate::collection_meta_js::CollectionMetadataJs;
 use crate::payouts::Payouts;
 
@@ -177,7 +179,6 @@ impl Contract {
         }
         let new_token_id = self.next_token();
         let token_id = format!("{}{}{}", TOKEN_TAG, DELIMITER, new_token_id);
-        let token_title = token_metadata.title.clone().unwrap();
 
         if let Some(some_collection_id) = collection_id {
             let collection_owner = env::predecessor_account_id();
@@ -242,9 +243,10 @@ impl Contract {
 
     fn mint_tokens(&mut self, token_id: TokenId,
                    token_owner_id: AccountId,
-                   token_metadata: TokenMetadata,
+                   mut token_metadata: TokenMetadata,
                    maybe_royalties: Option<Payout>,
     ) {
+        let token_title = token_metadata.title.clone().unwrap();
         match token_metadata.copies {
             Some(1) | None => {
                 self
@@ -258,9 +260,10 @@ impl Contract {
                                             .insert(&token_id, &royalties.clone()));
             }
             Some(copies) => {
-                for copy_id in 0..copies {
+                for copy_id in 1..(copies+1) {
+                    token_metadata.title = Some(format!("{}{}{}", token_title.clone(), COPY_NAME_DELIMITER, copy_id));
                     let copy_token_id =
-                        format!("{}{}{}", token_id.clone(), COPY_DELIMITER, copy_id + 1);
+                        format!("{}{}{}", token_id.clone(), COPY_DELIMITER, copy_id);
                     let refund = if copy_id != copies - 1 {
                         None
                     } else {
