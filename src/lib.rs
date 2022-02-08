@@ -2,7 +2,6 @@ mod payouts;
 mod collection_meta_js;
 
 use std::cmp::max;
-use std::collections::HashMap;
 use near_contract_standards::non_fungible_token::metadata::{NFTContractMetadata, TokenMetadata};
 use near_contract_standards::non_fungible_token::{hash_account_id, NonFungibleToken};
 use near_contract_standards::non_fungible_token::{Token, TokenId};
@@ -11,7 +10,6 @@ use near_sdk::{env, near_bindgen, AccountId, BorshStorageKey, PanicOnDefault, Pr
 use serde::{Serialize, Deserialize};
 use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet, Vector};
 use near_sdk::env::is_valid_account_id;
-use near_sdk::json_types::U128;
 use near_sdk::serde_json::json;
 use crate::collection_meta_js::CollectionMetadataJs;
 use crate::payouts::Payouts;
@@ -91,6 +89,7 @@ const COLLECTION_TAG: &str = "collection";
 const TOKEN_TAG: &str = "token";
 const DELIMITER: &str = "-";
 const COPY_DELIMITER: &str = "-";
+const COPY_NAME_DELIMITER: &str = " #";
 
 
 #[near_bindgen]
@@ -124,7 +123,7 @@ impl Contract {
     #[payable]
     #[private]
     pub fn add_collection(&mut self, metadata: CollectionMetadataJs, owner_id: AccountId) -> CollectionMetadata {
-        return self.internal_create_collection(metadata, owner_id);
+        return self.internal_create_collection(metadata,  owner_id);
     }
 
     #[payable]
@@ -178,6 +177,7 @@ impl Contract {
         }
         let new_token_id = self.next_token();
         let token_id = format!("{}{}{}", TOKEN_TAG, DELIMITER, new_token_id);
+        let token_title = token_metadata.title.clone().unwrap();
 
         if let Some(some_collection_id) = collection_id {
             let collection_owner = env::predecessor_account_id();
@@ -371,7 +371,7 @@ impl Contract {
     }
 
     pub fn nft_collection_supply(&self, collection_id: CollectionId) -> String {
-        return self.tokens_by_collection_id.get(&collection_id).unwrap().len().to_string();
+        return self.tokens_by_collection_id.get(&collection_id).unwrap().len().to_string()
     }
 
     fn next_collection(&mut self) -> u128 {
