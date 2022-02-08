@@ -2,6 +2,7 @@ mod payouts;
 mod collection_meta_js;
 
 use std::cmp::max;
+use std::collections::HashMap;
 use near_contract_standards::non_fungible_token::metadata::{NFTContractMetadata, TokenMetadata};
 use near_contract_standards::non_fungible_token::{hash_account_id, NonFungibleToken};
 use near_contract_standards::non_fungible_token::{Token, TokenId};
@@ -10,6 +11,7 @@ use near_sdk::{env, near_bindgen, AccountId, BorshStorageKey, PanicOnDefault, Pr
 use serde::{Serialize, Deserialize};
 use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet, Vector};
 use near_sdk::env::is_valid_account_id;
+use near_sdk::json_types::U128;
 use near_sdk::serde_json::json;
 use crate::collection_meta_js::CollectionMetadataJs;
 use crate::payouts::Payouts;
@@ -122,7 +124,7 @@ impl Contract {
     #[payable]
     #[private]
     pub fn add_collection(&mut self, metadata: CollectionMetadataJs, owner_id: AccountId) -> CollectionMetadata {
-        return self.internal_create_collection(metadata,  owner_id);
+        return self.internal_create_collection(metadata, owner_id);
     }
 
     #[payable]
@@ -225,48 +227,55 @@ impl Contract {
                 .keys()
                 .all(|acc| is_valid_account_id(acc.as_bytes())));
 
-            match token_metadata.copies {
-                Some(1) | None => {
-                    self
-                        .tokens
-                        .internal_mint(token_id.clone(),
-                                       token_owner_id.clone(),
-                                       Some(token_metadata));
-                    self.payouts.insert(&token_id, &royalties);
-                }
-                Some(copies) => {
-                    for copy_id in 0..copies {
-                        let copy_token_id =
-                            format!("{}{}{}", token_id.clone(), COPY_DELIMITER, copy_id + 1);
-                        self
-                            .tokens
-                            .internal_mint(copy_token_id.clone(),
-                                           token_owner_id.clone(),
-                                           Some(token_metadata.clone()));
-                        self.payouts.insert(&copy_token_id, &royalties.clone());
-                    }
-                }
-            }
+            self.mint_tokens(token_id,
+                             token_owner_id,
+                             token_metadata,
+                             Some(royalties.clone()));
         } else {
             // no royalties mint
-            match token_metadata.copies {
-                Some(1) | None => {
+            self.mint_tokens(token_id,
+                             token_owner_id,
+                             token_metadata,
+                             None);
+        }
+    }
+
+    fn mint_tokens(&mut self, token_id: TokenId,
+                   token_owner_id: AccountId,
+                   token_metadata: TokenMetadata,
+                   maybe_royalties: Option<Payout>,
+    ) {
+        match token_metadata.copies {
+            Some(1) | None => {
+                self
+                    .tokens
+                    .internal_mint(token_id.clone(),
+                                   token_owner_id.clone(),
+                                   Some(token_metadata));
+                maybe_royalties.clone().map(|royalties|
+                                        self
+                                            .payouts
+                                            .insert(&token_id, &royalties.clone()));
+            }
+            Some(copies) => {
+                for copy_id in 0..copies {
+                    let copy_token_id =
+                        format!("{}{}{}", token_id.clone(), COPY_DELIMITER, copy_id + 1);
+                    let refund = if copy_id != copies - 1 {
+                        None
+                    } else {
+                        Some(env::predecessor_account_id())
+                    };
                     self
                         .tokens
-                        .internal_mint(token_id.clone(),
-                                       token_owner_id.clone(),
-                                       Some(token_metadata));
-                }
-                Some(copies) => {
-                    for copy_id in 0..copies {
-                        let copy_token_id =
-                            format!("{}{}{}", token_id.clone(), COPY_DELIMITER, copy_id + 1);
+                        .internal_mint_with_refund(copy_token_id.clone(),
+                                                   token_owner_id.clone(),
+                                                   Some(token_metadata.clone()),
+                                                   refund);
+                    maybe_royalties.clone().map(|royalties|
                         self
-                            .tokens
-                            .internal_mint(copy_token_id.clone(),
-                                           token_owner_id.clone(),
-                                           Some(token_metadata.clone()));
-                    }
+                            .payouts
+                            .insert(&copy_token_id, &royalties.clone()));
                 }
             }
         }
@@ -362,7 +371,7 @@ impl Contract {
     }
 
     pub fn nft_collection_supply(&self, collection_id: CollectionId) -> String {
-        return self.tokens_by_collection_id.get(&collection_id).unwrap().len().to_string()
+        return self.tokens_by_collection_id.get(&collection_id).unwrap().len().to_string();
     }
 
     fn next_collection(&mut self) -> u128 {
