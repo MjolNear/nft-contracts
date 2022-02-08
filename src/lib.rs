@@ -89,6 +89,7 @@ const COLLECTION_TAG: &str = "collection";
 const TOKEN_TAG: &str = "token";
 const DELIMITER: &str = "-";
 const COPY_DELIMITER: &str = "-";
+const COPY_NAME_DELIMITER: &str = " #";
 
 
 #[near_bindgen]
@@ -176,6 +177,7 @@ impl Contract {
         }
         let new_token_id = self.next_token();
         let token_id = format!("{}{}{}", TOKEN_TAG, DELIMITER, new_token_id);
+        let token_title = token_metadata.title.clone().unwrap();
 
         if let Some(some_collection_id) = collection_id {
             let collection_owner = env::predecessor_account_id();
@@ -235,9 +237,10 @@ impl Contract {
                     self.payouts.insert(&token_id, &royalties);
                 }
                 Some(copies) => {
-                    for copy_id in 0..copies {
+                    for copy_id in 1..(copies+1) {
+                        token_metadata.title = Some(format!("{}{}{}", token_title.clone(), COPY_NAME_DELIMITER, copy_id));
                         let copy_token_id =
-                            format!("{}{}{}", token_id.clone(), COPY_DELIMITER, copy_id + 1);
+                            format!("{}{}{}", token_id.clone(), COPY_DELIMITER, copy_id);
                         self
                             .tokens
                             .internal_mint(copy_token_id.clone(),
@@ -258,9 +261,10 @@ impl Contract {
                                        Some(token_metadata));
                 }
                 Some(copies) => {
-                    for copy_id in 0..copies {
+                    for copy_id in 1..(copies+1) {
+                        token_metadata.title = Some(format!("{}{}{}", token_title.clone(), COPY_NAME_DELIMITER, copy_id));
                         let copy_token_id =
-                            format!("{}{}{}", token_id.clone(), COPY_DELIMITER, copy_id + 1);
+                            format!("{}{}{}", token_id.clone(), COPY_DELIMITER, copy_id);
                         self
                             .tokens
                             .internal_mint(copy_token_id.clone(),
