@@ -2,14 +2,15 @@ mod payouts;
 mod collection_meta_js;
 
 use std::cmp::max;
+use std::collections::HashMap;
 use near_contract_standards::non_fungible_token::metadata::{NFTContractMetadata, TokenMetadata};
 use near_contract_standards::non_fungible_token::{hash_account_id, NonFungibleToken};
 use near_contract_standards::non_fungible_token::{Token, TokenId};
+use near_contract_standards::non_fungible_token::core::{NonFungibleTokenCore, NonFungibleTokenResolver};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::{env, near_bindgen, AccountId, BorshStorageKey, PanicOnDefault, Promise, PromiseOrValue, assert_one_yocto, CryptoHash};
 use serde::{Serialize, Deserialize};
 use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet, Vector};
-use std::collections::HashMap;
 use near_sdk::env::is_valid_account_id;
 use near_sdk::serde_json::json;
 use near_sdk::json_types::U128;
@@ -80,7 +81,6 @@ pub struct Contract {
     total_collections: u128,
 }
 
-near_contract_standards::impl_non_fungible_token_core!(Contract, tokens);
 near_contract_standards::impl_non_fungible_token_enumeration!(Contract, tokens);
 near_contract_standards::impl_non_fungible_token_approval!(Contract, tokens);
 
@@ -125,7 +125,7 @@ impl Contract {
     #[payable]
     #[private]
     pub fn add_collection(&mut self, metadata: CollectionMetadataJs, owner_id: AccountId) -> CollectionMetadata {
-        return self.internal_create_collection(metadata,  owner_id);
+        return self.internal_create_collection(metadata, owner_id);
     }
 
     #[payable]
@@ -247,6 +247,7 @@ impl Contract {
                    maybe_royalties: Option<Payout>,
     ) {
         let token_title = token_metadata.title.clone().unwrap();
+        let mut minted_ids = vec![];
         match token_metadata.copies {
             Some(1) | None => {
                 self
@@ -255,12 +256,13 @@ impl Contract {
                                    token_owner_id.clone(),
                                    Some(token_metadata));
                 maybe_royalties.clone().map(|royalties|
-                                        self
-                                            .payouts
-                                            .insert(&token_id, &royalties.clone()));
+                    self
+                        .payouts
+                        .insert(&token_id, &royalties));
+                minted_ids.push(token_id.clone());
             }
             Some(copies) => {
-                for copy_id in 1..(copies+1) {
+                for copy_id in 1..(copies + 1) {
                     token_metadata.title = Some(format!("{}{}{}", token_title.clone(), COPY_NAME_DELIMITER, copy_id));
                     let copy_token_id =
                         format!("{}{}{}", token_id.clone(), COPY_DELIMITER, copy_id);
@@ -278,10 +280,23 @@ impl Contract {
                     maybe_royalties.clone().map(|royalties|
                         self
                             .payouts
-                            .insert(&copy_token_id, &royalties.clone()));
+                            .insert(&copy_token_id, &royalties));
+                    minted_ids.push(copy_token_id.clone());
                 }
             }
         }
+
+        env::log_str(&json!({
+        "standard": "nep171",
+        "version": "1.0.0",
+        "event": "nft_mint",
+        "data": [
+            {
+                "owner_id": token_owner_id,
+                "token_ids": minted_ids
+            }
+        ]
+        }).to_string());
     }
 
     pub fn get_nfts_from_collection(&self, collection_id: CollectionId,
@@ -374,7 +389,7 @@ impl Contract {
     }
 
     pub fn nft_collection_supply(&self, collection_id: CollectionId) -> String {
-        return self.tokens_by_collection_id.get(&collection_id).unwrap().len().to_string()
+        return self.tokens_by_collection_id.get(&collection_id).unwrap().len().to_string();
     }
 
     fn next_collection(&mut self) -> u128 {
@@ -477,5 +492,71 @@ impl Payouts for Contract {
         let payout = self.nft_payout(token_id.clone(), balance, max_len_payout);
         self.nft_transfer(receiver_id, token_id, Some(approval_id), None);
         payout
+    }
+}
+
+#[near_bindgen]
+impl NonFungibleTokenCore for Contract {
+    #[payable]
+    fn nft_transfer(
+        &mut self,
+        receiver_id: AccountId,
+        token_id: TokenId,
+        approval_id: Option<u64>,
+        memo: Option<String>,
+    ) {
+        self.tokens.nft_transfer(receiver_id.clone(),
+                                 token_id.clone(),
+                                 approval_id.clone(),
+                                 memo.clone());
+        env::log_str(&json!({
+        "standard": "nep171",
+        "version": "1.0.0",
+        "event": "nft_transfer",
+        "data": [
+                {
+                    "authorized_id": approval_id,
+                    "old_owner_id": env::predecessor_account_id(),
+                    "new_owner_id": receiver_id,
+                    "token_ids": [token_id],
+                    "memo": memo
+                }
+            ]
+        }).to_string());
+    }
+
+    #[payable]
+    fn nft_transfer_call(
+        &mut self,
+        receiver_id: AccountId,
+        token_id: TokenId,
+        approval_id: Option<u64>,
+        memo: Option<String>,
+        msg: String,
+    ) -> PromiseOrValue<bool> {
+        self.tokens.nft_transfer_call(receiver_id, token_id, approval_id, memo, msg)
+    }
+
+    fn nft_token(&self, token_id: TokenId) -> Option<Token> {
+        self.tokens.nft_token(token_id)
+    }
+}
+
+#[near_bindgen]
+impl NonFungibleTokenResolver for Contract {
+    #[private]
+    fn nft_resolve_transfer(
+        &mut self,
+        previous_owner_id: AccountId,
+        receiver_id: AccountId,
+        token_id: TokenId,
+        approved_account_ids: Option<std::collections::HashMap<AccountId, u64>>,
+    ) -> bool {
+        self.tokens.nft_resolve_transfer(
+            previous_owner_id,
+            receiver_id,
+            token_id,
+            approved_account_ids,
+        )
     }
 }
