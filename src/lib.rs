@@ -339,8 +339,16 @@ impl Contract {
         self.metadata
     }
 
-    pub fn get_collections(&self, limit: u64, from: u64) -> CollectionsBatch {
-        let collections: Vec<CollectionMetadata> = self.collections.values().collect();
+    pub fn get_collections(&self, limit: u64, from: u64, include_empty: bool) -> CollectionsBatch {
+        let collections: Vec<CollectionMetadata>;
+        if include_empty {
+            collections = self.collections.values().collect();
+        } else {
+            collections = self.collections.values().filter(|metadata|
+                self.tokens_by_collection_id.get(&metadata.collection_id).is_some() ||
+                    metadata.collection_contract != std::string::String::from("mjol.near")).collect();
+        }
+
         let size = collections.len() as u64;
 
         let mut res = vec![];
@@ -389,7 +397,7 @@ impl Contract {
     }
 
     pub fn nft_collection_supply(&self, collection_id: CollectionId) -> String {
-        return self.tokens_by_collection_id.get(&collection_id).unwrap().len().to_string();
+        return self.tokens_by_collection_id.get(&collection_id).unwrap_or(Vector::new(b"v".to_vec())).len().to_string();
     }
 
     fn next_collection(&mut self) -> u128 {
