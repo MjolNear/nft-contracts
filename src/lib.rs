@@ -162,6 +162,11 @@ impl Contract {
         assert!(owners_collections.insert(&collection_id.clone()));
         self.collections_by_owner_id.insert(&owner_id.clone(), &owners_collections);
 
+        env::log_str(&json!({
+            "type": "create_collection",
+            "data": meta.clone()
+            }).to_string());
+
         meta
     }
 
