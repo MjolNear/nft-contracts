@@ -33,6 +33,7 @@ enum StorageKey {
 }
 
 type CollectionId = String;
+type ContractId = String;
 
 #[derive(Serialize, Deserialize, BorshSerialize, BorshDeserialize, Clone)]
 #[serde(crate = "near_sdk::serde")]
@@ -85,6 +86,8 @@ pub struct Contract {
 near_contract_standards::impl_non_fungible_token_enumeration!(Contract, tokens);
 near_contract_standards::impl_non_fungible_token_approval!(Contract, tokens);
 
+const MJOL_CONTRACT: &str = "mjol.near";
+
 const MAX_PAYOUT: u128 = 10_000u128;
 const MAX_LEN_PAYOUT: usize = 10;
 
@@ -125,20 +128,29 @@ impl Contract {
 
     #[payable]
     #[private]
-    pub fn add_collection(&mut self, metadata: CollectionMetadataJs, owner_id: AccountId, custom_collection_id: Option<CollectionId>) -> CollectionMetadata {
-        return self.internal_create_collection(metadata, owner_id, custom_collection_id);
+    pub fn add_collection(&mut self,
+                          metadata: CollectionMetadataJs,
+                          contract_id: ContractId,
+                          owner_id: AccountId,
+    ) -> CollectionMetadata {
+        return self.internal_create_collection(metadata, contract_id, owner_id);
     }
 
     #[payable]
-    pub fn create_collection(&mut self, metadata: CollectionMetadataJs, custom_collection_id: Option<CollectionId>) -> CollectionMetadata {
+    pub fn create_collection(&mut self, metadata: CollectionMetadataJs) -> CollectionMetadata {
         let owner_id = env::predecessor_account_id();
-        return self.internal_create_collection(metadata, owner_id, custom_collection_id);
+        return self.internal_create_collection(metadata, String::from(MJOL_CONTRACT), owner_id);
     }
 
     #[payable]
     #[private]
-    pub fn internal_create_collection(&mut self, metadata: CollectionMetadataJs, owner_id: AccountId, custom_collection_id: Option<CollectionId>) -> CollectionMetadata {
-        let collection_id: CollectionId = if let Some(id) = custom_collection_id {
+    pub fn internal_create_collection(
+        &mut self,
+        metadata: CollectionMetadataJs,
+        contract_id: ContractId,
+        owner_id: AccountId,
+    ) -> CollectionMetadata {
+        let collection_id: CollectionId = if let Some(id) = metadata.custom_collection_id {
             let url_regexp = Regex::new(r"[a-z\-\d]+").unwrap();
             assert!(url_regexp.is_match(&id));
             assert!(self.collections.get(&id).is_none());
@@ -151,7 +163,7 @@ impl Contract {
         assert!(self.collections.get(&collection_id.clone()).is_none());
         let meta = CollectionMetadata {
             collection_id: collection_id.clone(),
-            collection_contract: metadata.contract,
+            collection_contract: contract_id.clone(),
             owner_id: owner_id.clone(),
             title: metadata.title,
             desc: metadata.desc,
