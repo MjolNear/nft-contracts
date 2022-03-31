@@ -6,8 +6,8 @@ use serde::{Serialize, Deserialize};
 #[serde(crate = "near_sdk::serde")]
 pub struct CollectionMetadataJs {
     pub title: String,
-    pub contract: String,
     pub desc: String,
     pub media: String,
-    pub reference: Option<String>
+    pub reference: Option<String>,
+    pub custom_collection_id: Option<String>,
 }
