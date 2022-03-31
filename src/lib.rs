@@ -14,6 +14,7 @@ use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet, Vector};
 use near_sdk::env::is_valid_account_id;
 use near_sdk::serde_json::json;
 use near_sdk::json_types::U128;
+use regex::Regex;
 use crate::collection_meta_js::CollectionMetadataJs;
 use crate::payouts::Payouts;
 
@@ -124,21 +125,28 @@ impl Contract {
 
     #[payable]
     #[private]
-    pub fn add_collection(&mut self, metadata: CollectionMetadataJs, owner_id: AccountId) -> CollectionMetadata {
-        return self.internal_create_collection(metadata, owner_id);
+    pub fn add_collection(&mut self, metadata: CollectionMetadataJs, owner_id: AccountId, custom_collection_id: Option<CollectionId>) -> CollectionMetadata {
+        return self.internal_create_collection(metadata, owner_id, custom_collection_id);
     }
 
     #[payable]
-    pub fn create_collection(&mut self, metadata: CollectionMetadataJs) -> CollectionMetadata {
+    pub fn create_collection(&mut self, metadata: CollectionMetadataJs, custom_collection_id: Option<CollectionId>) -> CollectionMetadata {
         let owner_id = env::predecessor_account_id();
-        return self.internal_create_collection(metadata, owner_id);
+        return self.internal_create_collection(metadata, owner_id, custom_collection_id);
     }
 
     #[payable]
     #[private]
-    pub fn internal_create_collection(&mut self, metadata: CollectionMetadataJs, owner_id: AccountId) -> CollectionMetadata {
-        let new_id = self.next_collection();
-        let collection_id: CollectionId = format!("{}{}{}", COLLECTION_TAG, DELIMITER, new_id);
+    pub fn internal_create_collection(&mut self, metadata: CollectionMetadataJs, owner_id: AccountId, custom_collection_id: Option<CollectionId>) -> CollectionMetadata {
+        let collection_id: CollectionId = if let Some(id) = custom_collection_id {
+            let url_regexp = Regex::new(r"[a-z\-\d]+").unwrap();
+            assert!(url_regexp.is_match(&id));
+            assert!(self.collections.get(&id).is_none());
+            id
+        } else {
+            let new_id = self.next_collection();
+            format!("{}{}{}", COLLECTION_TAG, DELIMITER, new_id)
+        };
 
         assert!(self.collections.get(&collection_id.clone()).is_none());
         let meta = CollectionMetadata {

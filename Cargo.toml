@@ -10,6 +10,7 @@ crate-type = ["cdylib", "rlib"]
 near-sdk = "4.0.0-pre.7"
 near-contract-standards = "4.0.0-pre.7"
 serde = { version = "1.*" ,features = ["derive"]}
+regex = "1"
 
 [profile.release]
 codegen-units = 1
