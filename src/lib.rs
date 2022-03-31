@@ -1,22 +1,26 @@
-mod payouts;
-mod collection_meta_js;
-
 use std::cmp::max;
 use std::collections::HashMap;
-use near_contract_standards::non_fungible_token::metadata::{NFTContractMetadata, TokenMetadata};
+
 use near_contract_standards::non_fungible_token::{hash_account_id, NonFungibleToken};
 use near_contract_standards::non_fungible_token::{Token, TokenId};
 use near_contract_standards::non_fungible_token::core::{NonFungibleTokenCore, NonFungibleTokenResolver};
+use near_contract_standards::non_fungible_token::metadata::{NFTContractMetadata, TokenMetadata};
+use near_sdk::{AccountId, assert_one_yocto, BorshStorageKey, CryptoHash, env, near_bindgen, PanicOnDefault, Promise, PromiseOrValue};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::{env, near_bindgen, AccountId, BorshStorageKey, PanicOnDefault, Promise, PromiseOrValue, assert_one_yocto, CryptoHash};
-use serde::{Serialize, Deserialize};
 use near_sdk::collections::{LookupMap, UnorderedMap, UnorderedSet, Vector};
 use near_sdk::env::is_valid_account_id;
-use near_sdk::serde_json::json;
 use near_sdk::json_types::U128;
+use near_sdk::serde_json::json;
 use regex::Regex;
+use serde::{Deserialize, Serialize};
+
 use crate::collection_meta_js::CollectionMetadataJs;
 use crate::payouts::Payouts;
+use crate::whitelisted_meta::WhitelistedToken;
+
+mod payouts;
+mod collection_meta_js;
+mod whitelisted_meta;
 
 #[derive(BorshSerialize, BorshStorageKey)]
 enum StorageKey {
@@ -140,6 +144,19 @@ impl Contract {
     pub fn create_collection(&mut self, metadata: CollectionMetadataJs) -> CollectionMetadata {
         let owner_id = env::predecessor_account_id();
         return self.internal_create_collection(metadata, String::from(MJOL_CONTRACT), owner_id);
+    }
+
+    #[payable]
+    #[private]
+    pub fn add_whitelisted_tokens(
+        tokens: Vec<WhitelistedToken>
+    ) {
+        env::log_str(&json!({
+            "type": "add_whitelisted_tokens",
+            "data": {
+                "tokens": tokens.clone()
+            }
+        }).to_string())
     }
 
     #[payable]
