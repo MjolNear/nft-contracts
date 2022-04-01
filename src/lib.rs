@@ -168,7 +168,7 @@ impl Contract {
         owner_id: AccountId,
     ) -> CollectionMetadata {
         let collection_id: CollectionId = if let Some(id) = metadata.custom_collection_id {
-            let url_regexp = Regex::new(r"[a-z\-\d]+").unwrap();
+            let url_regexp = Regex::new(r"^[a-z\-\d]+$").unwrap();
             assert!(url_regexp.is_match(&id));
             assert!(self.collections.get(&id).is_none());
             id
