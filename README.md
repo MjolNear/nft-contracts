@@ -1,6 +1,4 @@
-# marketplace-factory
-
-# Marketplace Contract
+# NFT store Contract
 
 This mono repo contains the source code for the smart contracts of our Open NFT Marketplace on [NEAR](https://near.org).
 
