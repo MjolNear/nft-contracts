@@ -141,6 +141,25 @@ impl Contract {
     }
 
     #[payable]
+    #[private]
+    pub fn remove_collection(&mut self,
+                          collection_id: ContractId,
+                          owner_id: AccountId,
+    ) {
+        self.collections.remove(&collection_id.clone());
+        let mut collections = self.collections_by_owner_id.get(&owner_id.clone()).unwrap();
+        collections.remove(&collection_id.clone());
+        self.collections_by_owner_id.insert(&owner_id.clone(), &collections);
+
+        env::log_str(&json!({
+            "type": "remove_collection",
+            "data": {
+                "collection_id": collection_id.clone()
+            }
+        }).to_string())
+    }
+
+    #[payable]
     pub fn create_collection(&mut self, metadata: CollectionMetadataJs) -> CollectionMetadata {
         let owner_id = env::predecessor_account_id();
         return self.internal_create_collection(metadata, String::from(MJOL_CONTRACT), owner_id);
