@@ -143,8 +143,8 @@ impl Contract {
     #[payable]
     #[private]
     pub fn remove_collection(&mut self,
-                          collection_id: ContractId,
-                          owner_id: AccountId,
+                             collection_id: ContractId,
+                             owner_id: AccountId,
     ) {
         self.collections.remove(&collection_id.clone());
         let mut collections = self.collections_by_owner_id.get(&owner_id.clone()).unwrap();
@@ -344,20 +344,21 @@ impl Contract {
                             .insert(&copy_token_id, &royalties));
                     minted_ids.push(copy_token_id.clone());
                 }
+
+                env::log_str(
+                    &format!("EVENT_JSON:{}", json!({
+                    "standard": "nep171",
+                    "version": "1.0.0",
+                    "event": "nft_mint",
+                    "data": [
+                        {
+                            "owner_id": token_owner_id,
+                            "token_ids": minted_ids
+                        }
+                    ]
+                }).to_string()));
             }
         }
-
-        env::log_str(&json!({
-        "standard": "nep171",
-        "version": "1.0.0",
-        "event": "nft_mint",
-        "data": [
-            {
-                "owner_id": token_owner_id,
-                "token_ids": minted_ids
-            }
-        ]
-        }).to_string());
     }
 
     pub fn get_nfts_from_collection(&self, collection_id: CollectionId,
